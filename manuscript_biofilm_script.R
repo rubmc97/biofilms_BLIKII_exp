@@ -118,7 +118,7 @@ taxa = taxid
 
 #Handoff to phyloseq
 
-sd_biofilms = read.csv("metada_biofilms.csv")
+sd_biofilms = read.csv("metadata_blik_2_exp_0424.csv")
 
 phyloseq_biofilms = phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
                              sample_data(sd_biofilms), 
@@ -1797,3 +1797,4 @@ pcoa.as.pb = ggplot(pcoa.df, aes(x = Axis1, y = Axis2)) +
   scale_y_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
   theme_bw()
 pcoa.as.pb
+
