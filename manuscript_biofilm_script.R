@@ -118,7 +118,7 @@ taxa = taxid
 
 #Handoff to phyloseq
 
-sd_biofilms = read.csv("metadata_blik_2_exp_0424.csv")
+sd_biofilms = read.csv("metada_biofilms.csv")
 
 phyloseq_biofilms = phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
                              sample_data(sd_biofilms), 
@@ -232,7 +232,7 @@ as.plot.alpha.ott = ggplot(as.alpha.ott, aes(x = factor(site, levels = custom_or
   facet_grid( ~ st) +
   scale_fill_manual(values = colors) +  # Set custom colors
   ggpubr::theme_pubclean() + labs(x = "Site", y = "Observed ASVs") +
-  ggpubr::stat_compare_means(comparisons = list(c("EO", "IO"), c("IO", "FO"), c("EO", "FO")), label = "p.signif", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
+  ggpubr::stat_compare_means(comparisons = list(c("EO", "IO"), c("IO", "FO"), c("EO", "FO")), label = "p.adj", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
   theme(
     axis.line = element_line(color = "black"),  # Add x and y axis lines
     axis.ticks = element_line(color = "black"),  # Add axis ticks
@@ -247,7 +247,7 @@ ns.plot.alpha.ott = ggplot(ns.alpha.ott, aes(x = factor(site, levels = custom_or
   facet_grid( ~ st) +
   scale_fill_manual(values = colors) +  # Set custom colors
   ggpubr::theme_pubclean() + labs(x = "Site", y = "Observed ASVs") +
-  ggpubr::stat_compare_means(comparisons = list(c("EO", "IO"), c("IO", "FO"), c("EO", "FO")), label = "p.signif", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
+  ggpubr::stat_compare_means(comparisons = list(c("EO", "IO"), c("IO", "FO"), c("EO", "FO")), label = "p.adj", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
   theme(
     axis.line = element_line(color = "black"),  # Add x and y axis lines
     axis.ticks = element_line(color = "black"),  # Add axis ticks
@@ -277,7 +277,7 @@ as.plot.alpha.pb = ggplot(as.alpha.pb, aes(x = factor(site, levels = custom_orde
   labs(x = "Site", y = "Observed ASVs") +
   scale_fill_manual(values = colors_pb) +  # Set custom colors
   ggpubr::theme_pubclean() +
-  ggpubr::stat_compare_means(comparisons = list(c("EP", "FO")), label = "p.signif", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
+  ggpubr::stat_compare_means(comparisons = list(c("EP", "FO")), label = "p.adj", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
   theme(
     axis.line = element_line(color = "black"),  # Add x and y axis lines
     axis.ticks = element_line(color = "black"),  # Add axis ticks
@@ -293,7 +293,7 @@ ns.plot.alpha.pb = ggplot(ns.alpha.pb, aes(x = factor(site, levels = custom_orde
   labs(x = "Site", y = "Observed ASVs") +
   scale_fill_manual(values = colors_pb) +  # Set custom colors
   ggpubr::theme_pubclean() +
-  ggpubr::stat_compare_means(comparisons = list(c("EP", "FO")), label = "p.signif", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
+  ggpubr::stat_compare_means(comparisons = list(c("EP", "FO")), label = "p.adj", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
   theme(
     axis.line = element_line(color = "black"),  # Add x and y axis lines
     axis.ticks = element_line(color = "black"),  # Add axis ticks
@@ -320,8 +320,8 @@ pcoa.as.ott.df = data.frame(SampleID = rownames(pcoa.res$vectors),
                             Axis2 = pcoa.res$vectors[, 2])
 
 sd.ott.as = sample_data(as.ott) %>% as.matrix.data.frame()
-write.csv(sd.ott.as, "sd_as_ott.csv")
-sd.ott.as = read.csv("sd_as_ott.csv", row.names = 1)
+#write.csv(sd.ott.as, "sd_as_ott.csv")
+#sd.ott.as = read.csv("sd_as_ott.csv", row.names = 1)
 
 
 pcoa.df = merge(pcoa.as.ott.df, sd.ott.as, by.x = "SampleID", by.y = "row.names")
@@ -333,22 +333,25 @@ nut.ott.as = read.csv("nuts_as_ott.csv", row.names = 1)
 all(rownames(sample_data(as.ott)) %in% rownames(nut.ott.as))
 
 env.fit = envfit(pcoa.res$vectors, nut.ott.as, permutations = 999)
-# Extract p-values
 pvals = env.fit$vectors$pvals
-
 # Get names of variables with p < 0.05
 padj = p.adjust(pvals, method = "fdr")
 significant.vars = names(padj[padj < 0.05])
 
-# Filter the vectors
-significant.vectors = env.fit$vectors$arrows[significant.vars, ]
-
-vec_lengths = env.fit$vectors$r 
 env.vectors = as.data.frame(env.fit$vectors$arrows)
 env.vectors$Variable = rownames(env.vectors)
 env.vectors$Length = env.fit$vectors$r
 env.vectors$x_end = env.vectors$Axis.1 * env.vectors$Length * 0.5
 env.vectors$y_end = env.vectors$Axis.2 * env.vectors$Length * 0.5
+
+# Keep only significant ones
+env.vectors = env.vectors[env.vectors$Variable %in% significant.vars, ]
+
+# Calculate angles in radians
+env.vectors$angle_rad <- atan2(env.vectors$y_end, env.vectors$x_end)
+
+# Convert to degrees (optional)
+env.vectors$angle_deg <- env.vectors$angle_rad * (180 / pi)
 
 
 lu.colors = c("intensive" = "#E69F00", "forest" = "#009E73", "extensive" = "#999999")
@@ -363,11 +366,45 @@ pcoa.as.ott = ggplot(pcoa.df, aes(x = Axis1, y = Axis2)) +  # Adjust "LandUse" a
   geom_text_repel(data = env.vectors,
                   aes(x = x_end, y = y_end, label = Variable),
                   size = 4) +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        strip.background = element_blank()) +
   labs(x = paste0("PCoA1 (", round(pcoa.res$values$Relative_eig[1] * 100, 2), "%)"),
        y = paste0("PCoA2 (", round(pcoa.res$values$Relative_eig[2] * 100, 2), "%)"),
-       title = "PCoA AS") + scale_x_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
-  scale_y_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) + theme_bw()
+       title = "PCoA DB") +
+  scale_x_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
+  scale_y_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25))
 pcoa.as.ott
+
+bd.as.ott = betadisper(bray.as.ott, sample_data(as.ott)$land_use)
+
+df.as.ott = data.frame(
+  Distance_to_centroid = bd.as.ott$distances,
+  land_use = bd.as.ott$group,
+  st = sample_data(as.ott)$st
+)
+
+bp.beta.as.ott = ggplot(df.as.ott, aes(x = land_use, y = Distance_to_centroid, fill = land_use)) + 
+  geom_boxplot(alpha = 0.5) +
+  facet_wrap(~ st) +
+  theme_classic2() +
+  stat_compare_means(label = "p.format", hide.ns = TRUE, method = "kruskal.test") +
+  stat_compare_means(method = "wilcox.test",
+                     comparisons = list(c("extensive", "intensive"),
+                                        c("intensive", "forest"), c("extensive", "forest")),
+                     label = "p.signif", hide.ns = TRUE, p.adjust.methods = "BH") +
+  scale_fill_manual(values = lu.colors) +
+  theme(
+    axis.text.x = element_text(hjust = 0, vjust = 0.5),
+    plot.title = element_text(
+      family = "sans",
+      face = "bold",
+      size = 11,
+      hjust = 0.5)) +
+  labs(title = "DB") +
+  scale_y_continuous(limits = c(0.2, 1.0), breaks = c(0.2, 0.4, 0.6, 0.8, 1.0))
+bp.beta.as.ott
+
 
 bray.ns.ott = phyloseq::distance(ns.ott, method = "bray")
 
@@ -395,9 +432,6 @@ pvals = env.fit$vectors$pvals
 padj = p.adjust(pvals, method = "fdr")
 significant.vars = names(padj[padj < 0.05])
 
-# Filter the vectors
-significant.vectors = env.fit$vectors$arrows[significant.vars, ]
-
 vec_lengths = env.fit$vectors$r 
 env.vectors = as.data.frame(env.fit$vectors$arrows)
 env.vectors$Variable = rownames(env.vectors)
@@ -405,6 +439,19 @@ env.vectors$Length = env.fit$vectors$r
 env.vectors$x_end = env.vectors$Axis.1 * env.vectors$Length * 0.5
 env.vectors$y_end = env.vectors$Axis.2 * env.vectors$Length * 0.5
 
+# Keep only significant ones
+env.vectors = env.vectors[env.vectors$Variable %in% significant.vars, ]
+
+# Calculate angles in radians
+env.vectors$angle_rad <- atan2(env.vectors$y_end, env.vectors$x_end)
+
+# Convert to degrees (optional)
+env.vectors$angle_deg <- env.vectors$angle_rad * (180 / pi)
+
+# View the table
+env.vectors[, c("Variable", "Length", "x_end", "y_end", "angle_deg")]
+
+write.csv(env.vectors, "MB_PCOA_env_vectors.csv")
 
 lu.colors = c("intensive" = "#E69F00", "forest" = "#009E73", "extensive" = "#999999")
 land.use = sample_data(ns.ott)$land_use
@@ -418,11 +465,43 @@ pcoa.ns.ott = ggplot(pcoa.df, aes(x = Axis1, y = Axis2)) +  # Adjust "LandUse" a
   geom_text_repel(data = env.vectors,
                   aes(x = x_end, y = y_end, label = Variable),
                   size = 4) +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        strip.background = element_blank()) +
   labs(x = paste0("PCoA1 (", round(pcoa.res$values$Relative_eig[1] * 100, 2), "%)"),
        y = paste0("PCoA2 (", round(pcoa.res$values$Relative_eig[2] * 100, 2), "%)"),
        title = "PCoA NS") + scale_x_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
-  scale_y_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) + theme_bw()
+  scale_y_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25))
 pcoa.ns.ott
+#Beta dispersion analysis
+bd.ns.ott = betadisper(bray.ns.ott, sample_data(ns.ott)$land_use)
+
+df.beta.ns.ott = data.frame(
+  Distance_to_centroid = bd.ns.ott$distances,
+  land_use = bd.ns.ott$group,
+  st = sample_data(ns.ott)$st
+)
+
+bp.beta.ns.ott = ggplot(df.beta.ns.ott, aes(x = land_use, y = Distance_to_centroid, fill = land_use)) + 
+  geom_boxplot(alpha = 0.5) +
+  facet_wrap(~ st) +
+  theme_classic2() +
+  stat_compare_means(label = "p.format", hide.ns = TRUE, method = "kruskal.test") +
+  stat_compare_means(method = "wilcox.test",
+                     comparisons = list(c("extensive", "intensive"),
+                                        c("intensive", "forest"), c("extensive", "forest")),
+                     label = "p.signif", hide.ns = TRUE, p.adjust.methods = "BH") +
+  scale_fill_manual(values = lu.colors) +
+  theme(
+    axis.text.x = element_text(hjust = 0, vjust = 0.5),
+    plot.title = element_text(
+      family = "sans",
+      face = "bold",
+      size = 11,
+      hjust = 0.5)) +
+  labs(title = "MB") +
+  scale_y_continuous(limits = c(0.2, 1.0), breaks = c(0.2, 0.4, 0.6, 0.8, 1.0))
+bp.beta.ns.ott
 
 blik.pb = subset_samples(phy.blik2.css, stream == "perlenbach")
 as.pb = subset_samples(blik.pb, sample_type == "AS")
@@ -453,15 +532,27 @@ pvals = env.fit$vectors$pvals
 padj = p.adjust(pvals, method = "fdr")
 significant.vars = names(padj[padj < 0.05])
 
-# Filter the vectors
-significant.vectors = env.fit$vectors$arrows[significant.vars, ]
-
 vec_lengths = env.fit$vectors$r 
 env.vectors = as.data.frame(env.fit$vectors$arrows)
 env.vectors$Variable = rownames(env.vectors)
 env.vectors$Length = env.fit$vectors$r
 env.vectors$x_end = env.vectors$Axis.1 * env.vectors$Length * 0.5
 env.vectors$y_end = env.vectors$Axis.2 * env.vectors$Length * 0.5
+
+# Keep only significant ones
+env.vectors = env.vectors[env.vectors$Variable %in% significant.vars, ]
+
+# Calculate angles in radians
+env.vectors$angle_rad = atan2(env.vectors$y_end, env.vectors$x_end)
+
+# Convert to degrees (optional)
+env.vectors$angle_deg = env.vectors$angle_rad * (180 / pi)
+
+# View the table
+env.vectors[, c("Variable", "Length", "x_end", "y_end", "angle_deg")]
+
+#write.csv(env.vectors, "DB_PB_PCOA_env_vectors.csv")
+
 
 
 lu.colors = c("forest" = "#009E73", "extensive" = "#999999")
@@ -476,11 +567,42 @@ pcoa.as.pb = ggplot(pcoa.df, aes(x = Axis1, y = Axis2)) +  # Adjust "LandUse" as
   geom_text_repel(data = env.vectors,
                   aes(x = x_end, y = y_end, label = Variable),
                   size = 4) +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        strip.background = element_blank()) +
   labs(x = paste0("PCoA1 (", round(pcoa.res$values$Relative_eig[1] * 100, 2), "%)"),
        y = paste0("PCoA2 (", round(pcoa.res$values$Relative_eig[2] * 100, 2), "%)"),
-       title = "PCoA AS") + scale_x_continuous(limits = c(-0.55, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
-  scale_y_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) + theme_bw()
+       title = "PCoA DB") + scale_x_continuous(limits = c(-0.55, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
+  scale_y_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25))
 pcoa.as.pb
+
+bd.as.pb = betadisper(bray.as.pb, sample_data(as.pb)$land_use)
+
+df.beta.as.pb = data.frame(
+  Distance_to_centroid = bd.as.pb$distances,
+  land_use = bd.as.pb$group,
+  st = sample_data(as.pb)$st
+)
+
+bp.beta.as.bp = ggplot(df.beta.as.pb, aes(x = land_use, y = Distance_to_centroid, fill = land_use)) + 
+  geom_boxplot(alpha = 0.5) +
+  facet_wrap(~ st) +
+  theme_classic2() +
+  stat_compare_means(label = "p.format", hide.ns = TRUE, method = "kruskal.test") +
+  stat_compare_means(method = "wilcox.test",
+                     comparisons = list(c("extensive", "forest")),
+                     label = "p.signif", hide.ns = TRUE) +
+  scale_fill_manual(values = lu.colors) +
+  theme(
+    axis.text.x = element_text(hjust = 0, vjust = 0.5),
+    plot.title = element_text(
+      family = "sans",
+      face = "bold",
+      size = 11,
+      hjust = 0.5)) +
+  labs(title = "DB") +
+  scale_y_continuous(limits = c(0.2, 1.0), breaks = c(0.2, 0.4, 0.6, 0.8, 1.0))
+bp.beta.as.bp
 
 bray.ns.pb = phyloseq::distance(ns.pb, method = "bray")
 pcoa.res = ape::pcoa(bray.ns.pb)
@@ -505,15 +627,26 @@ pvals = env.fit$vectors$pvals
 padj = p.adjust(pvals, method = "fdr")
 significant.vars = names(padj[padj < 0.05])
 
-# Filter the vectors
-significant.vectors = env.fit$vectors$arrows[significant.vars, ]
-
 vec_lengths = env.fit$vectors$r 
 env.vectors = as.data.frame(env.fit$vectors$arrows)
 env.vectors$Variable = rownames(env.vectors)
 env.vectors$Length = env.fit$vectors$r
 env.vectors$x_end = env.vectors$Axis.1 * env.vectors$Length * 0.5
 env.vectors$y_end = env.vectors$Axis.2 * env.vectors$Length * 0.5
+
+# Keep only significant ones
+env.vectors = env.vectors[env.vectors$Variable %in% significant.vars, ]
+
+# Calculate angles in radians
+env.vectors$angle_rad = atan2(env.vectors$y_end, env.vectors$x_end)
+
+# Convert to degrees (optional)
+env.vectors$angle_deg = env.vectors$angle_rad * (180 / pi)
+
+# View the table
+env.vectors[, c("Variable", "Length", "x_end", "y_end", "angle_deg")]
+
+write.csv(env.vectors, "MB_PB_PCOA_env_vectors.csv")
 
 lu.colors = c("forest" = "#009E73", "extensive" = "#999999")
 
@@ -525,14 +658,53 @@ pcoa.ns.pb = ggplot(pcoa.df, aes(x = Axis1, y = Axis2)) +  # Adjust "LandUse" as
   geom_text_repel(data = env.vectors,
                   aes(x = x_end, y = y_end, label = Variable),
                   size = 4) +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        strip.background = element_blank()) +
   labs(x = paste0("PCoA1 (", round(pcoa.res$values$Relative_eig[1] * 100, 2), "%)"),
        y = paste0("PCoA2 (", round(pcoa.res$values$Relative_eig[2] * 100, 2), "%)"),
-       title = "PCoA NS") + theme_bw() + scale_x_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
+       title = "PCoA MB") +  scale_x_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
   scale_y_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25))
 pcoa.ns.pb
 
 all.pcoa = ggpubr::ggarrange(pcoa.as.ott, pcoa.ns.ott, pcoa.as.pb, pcoa.ns.pb, ncol = 2, nrow = 2, common.legend = T, labels = "B")
+pdf("Fig2B_PCOA_DB_MB_OTT_PB.pdf", width = 8, height = 8)
 all.pcoa
+dev.off()
+
+bd.ns.pb = betadisper(bray.ns.pb, sample_data(ns.pb)$land_use)
+
+df.beta.ns.pb = data.frame(
+  Distance_to_centroid = bd.ns.pb$distances,
+  land_use = bd.ns.pb$group,
+  st = sample_data(ns.pb)$st
+)
+
+bp.beta.ns.bp = ggplot(df.beta.ns.pb, aes(x = land_use, y = Distance_to_centroid, fill = land_use)) + 
+  geom_boxplot(alpha = 0.5) +
+  facet_wrap(~ st) +
+  theme_classic2() +
+  stat_compare_means(label = "p.format", hide.ns = TRUE, method = "kruskal.test") +
+  stat_compare_means(method = "wilcox.test",
+                     comparisons = list(c("extensive", "forest")),
+                     label = "p.signif", hide.ns = TRUE) +
+  scale_fill_manual(values = lu.colors) +
+  theme(
+    axis.text.x = element_text(hjust = 0, vjust = 0.5),
+    plot.title = element_text(
+      family = "sans",
+      face = "bold",
+      size = 11,
+      hjust = 0.5)) +
+  labs(title = "DB") +
+  scale_y_continuous(limits = c(0.2, 1.0), breaks = c(0.2, 0.4, 0.6, 0.8, 1.0))
+bp.beta.ns.bp
+
+pdf("FigS3_beta_disp_DB_MB_OTT_PB.pdf", width = 8, height = 8)
+beta.all = ggpubr::ggarrange(bp.beta.as.ott, bp.beta.ns.ott, bp.beta.as.bp, bp.beta.ns.bp,
+                             ncol = 2, nrow = 2, common.legend = T, labels = c("A", "B", "C", "D"))
+beta.all
+dev.off()
 
 #PERMANOVA FOR AS OTT
 adonis2(bray.as.ott ~land_use, data = sd.ott.as)
@@ -573,41 +745,58 @@ ns.pb.t2 = prune_taxa(taxa_sums(ns.pb.t2) > 0, ns.pb.t2)
 
 #Running ANCOMBC2
 load("phyloseq_biofilms_filt_16042025.RData") #load the phyloseq object prior to CSS normalization
-blik.ott = subset_samples(phyloseq.biofilms.filt, stream == "otterbach")
-as.ott = subset_samples(blik.ott, sample_type == "AS")
-ns.ott = subset_samples(blik.ott, sample_type == "NS")
-as.ott = prune_taxa(taxa_sums(as.ott) > 0, as.ott)
-ns.ott = prune_taxa(taxa_sums(ns.ott) > 0, ns.ott)
 
-sd.as.ott = phyloseq::sample_data(as.ott)
+sd = sample_data(as.ott)
 
-sample_data(as.ott)$land_use_st = interaction(sample_data(as.ott)$land_use, sample_data(as.ott)$st)
-# Make sure the combined factor is a factor
-sample_data(as.ott)$land_use_st = factor(sample_data(as.ott)$land_use_st)
+# Make sure the variables are factors
+sample_data(as.ott.t1)$site = factor(sample_data(as.ott.t1)$site)
 
-# Set 'extensive_T2' as the reference level
-sample_data(as.ott)$land_use_st = relevel(sample_data(as.ott)$land_use_st, ref = "forest.T1")
-sample_data(as.ott)$land_use_st = relevel(sample_data(as.ott)$land_use_st, ref = "forest.T2")
+# Set reference levels
+sample_data(as.ott.t1)$site = relevel(sample_data(as.ott.t1)$site, ref = "EO")
+sample_data(as.ott.t2)$site = relevel(sample_data(as.ott.t2)$site, ref = "EO")
 
-ancombc2.as.t1 = ancombc2(as.ott, p_adj_method = "fdr", fix_formula = "land_use_st", group = "land_use_st", tax_level = NULL,
+#Run ANCOMBC2
+ancombc2.as.t1.eo.ref = ancombc2(as.ott.t1, p_adj_method = "fdr", fix_formula = "site", group = "site", tax_level = NULL,
                           alpha = 0.05, verbose = F, dunnet = T, pairwise = F)
 
-ancombc2.as.t2 = ancombc2(as.ott, p_adj_method = "fdr", fix_formula = "land_use_st", group = "land_use_st", tax_level = NULL,
+#Run ANCOMBC2
+ancombc2.as.t2.eo.ref = ancombc2(as.ott.t2, p_adj_method = "fdr", fix_formula = "site", group = "site", tax_level = NULL,
                           alpha = 0.05, verbose = F, dunnet = T, pairwise = F)
 
-res.ancombc2.as.t1 = ancombc2.as.t1$res
-res.ancombc2.as.t2 = ancombc2.as.t2$res
+res.ancombc2.as.t1.eo.ref = ancombc2.as.t1.eo.ref$res
+res.ancombc2.as.t2.eo.ref = ancombc2.as.t2.eo.ref$res
 
-res.ancombc2.as.t1$ASV = res.ancombc2.as.t1$taxon
-res.ancombc2.as.t2$ASV = res.ancombc2.as.t2$taxon
+res.ancombc2.as.t1.eo.ref$ASV = res.ancombc2.as.t1.eo.ref$taxon
+res.ancombc2.as.t2.eo.ref$ASV = res.ancombc2.as.t2.eo.ref$taxon
 
-res.ancombc2.as.t1 = res.ancombc2.as.t1[, c(2, 4, 11, 13, 23), drop = FALSE] #select columns of interest
+res.ancombc2.as.t1.eo.ref = res.ancombc2.as.t1.eo.ref[, c(3, 4, 12, 13, 21, 22, 23), drop = FALSE] #select columns of interest
 
-res.ancombc2.as.t1_1 = res.ancombc2.as.t1 %>%
-  filter((p_land_use_stextensive.T1 < 0.05 &
-            abs(lfc_land_use_stextensive.T1) > 0.5) |
-           (p_land_use_stintensive.T1 < 0.05 &
-              abs(lfc_land_use_stintensive.T1) > 0.5))
+tt.as.ott = as.data.frame(tax_table(as.ott))
+tt.as.ott$ASV = row.names(tt.as.ott)
+
+res.ancombc2.as.t1.eo.ref = res.ancombc2.as.t1.eo.ref %>%
+  filter((q_siteFO < 0.05 &
+            passed_ss_siteFO == "TRUE" &
+            abs(lfc_siteFO) > 0.5) |
+           (q_siteIO < 0.05 &
+              passed_ss_siteIO == "TRUE" &
+              abs(lfc_siteIO) > 0.5))
+
+res.anbc2.as.t1.iovseo = res.ancombc2.as.t1.eo.ref %>%
+  filter((q_siteIO < 0.05 &
+              passed_ss_siteIO == "TRUE" &
+              abs(lfc_siteIO) > 0.5))
+
+res.anbc2.as.t2.iovseo = res.ancombc2.as.t2.eo.ref %>%
+  filter((q_siteIO < 0.05 &
+            passed_ss_siteIO == "TRUE" &
+            abs(lfc_siteIO) > 0.5))
+
+df.res.anbc2.as.t1.iovseo = merge(res.anbc2.as.t1.iovseo, tt.as.ott, by = "ASV")
+df.res.anbc2.as.t2.iovseo = merge(res.anbc2.as.t2.iovseo, tt.as.ott, by = "ASV")
+
+write.csv(df.res.anbc2.as.t1.iovseo, "ancombc2_AS_T1.csv")
+write.csv(df.res.anbc2.as.t2.iovseo, "ancombc2_AS_T2.csv")
 
 res.ancombc2.as.t2_1 = res.ancombc2.as.t2 %>%
   filter((p_land_use_stextensive.T2 < 0.05 &
@@ -745,17 +934,54 @@ res.ancombc2.ns.t2.mut.long.filt = res.ancombc2.ns.t2.mut.long %>%
     str_remove(contrns., "^[^_]+_") == str_remove(lfc_source, "^[^_]+_")
   )
 
+# Set reference levels
+sample_data(ns.ott.t1)$site = relevel(sample_data(ns.ott.t1)$site, ref = "EO")
+sample_data(ns.ott.t2)$site = relevel(sample_data(ns.ott.t2)$site, ref = "EO")
+
+#Run ANCOMBC2
+ancombc2.ns.t1.eo.ref = ancombc2(ns.ott.t1, p_adj_method = "fdr", fix_formula = "site", group = "site", tax_level = NULL,
+                                 alpha = 0.05, verbose = F, dunnet = F, pairwise = F)
+
+#Run ANCOMBC2
+ancombc2.ns.t2.eo.ref = ancombc2(ns.ott.t2, p_adj_method = "fdr", fix_formula = "site", group = "site", tax_level = NULL,
+                                 alpha = 0.05, verbose = F, dunnet = F, pairwise = F)
+
+res.ancombc2.ns.t1.eo.ref = ancombc2.ns.t1.eo.ref$res
+res.ancombc2.ns.t2.eo.ref = ancombc2.ns.t2.eo.ref$res
+
+res.ancombc2.ns.t1.eo.ref$ASV = res.ancombc2.ns.t1.eo.ref$taxon
+res.ancombc2.ns.t2.eo.ref$ASV = res.ancombc2.ns.t2.eo.ref$taxon
+
+tt.ns.ott = as.data.frame(tax_table(ns.ott))
+tt.ns.ott$ASV = row.names(tt.ns.ott)
+
+res.anbc2.ns.t1.iovseo = res.ancombc2.ns.t1.eo.ref %>%
+  filter((q_siteIO < 0.05 &
+            passed_ss_siteIO == "TRUE" &
+            abs(lfc_siteIO) > 0.5))
+
+res.anbc2.ns.t2.iovseo = res.ancombc2.ns.t2.eo.ref %>%
+  filter((q_siteIO < 0.05 &
+            passed_ss_siteIO == "TRUE" &
+            abs(lfc_siteIO) > 0.5))
+
+df.res.ancombc2.ns.iovseo.t1 = merge(res.anbc2.ns.t1.iovseo, tt.ns.ott, by = "ASV")
+df.res.ancombc2.ns.iovseo.t2 = merge(res.anbc2.ns.t2.iovseo, tt.ns.ott, by = "ASV")
+
 write.csv(res.ancombc2.as.t1.mut.long.filt, "ancombc2_AS_T1.csv")
 write.csv(res.ancombc2.as.t2.mut.long.filt, "ancombc2_AS_T2.csv")
 write.csv(res.ancombc2.ns.t1.mut.long.filt, "ancombc2_NS_T1.csv")
 write.csv(res.ancombc2.ns.t2.mut.long.filt, "ancombc2_NS_T2.csv")
 
+write.csv(df.res.ancombc2.ns.iovseo.t1, "ancombc2_MB_iovseo_T1.csv")
+write.csv(df.res.ancombc2.ns.iovseo.t2, "ancombc2_MB_iovseo_T2.csv")
+
 #Perlenbach samples
 
-ancombc2.as.pb <- ancombc2(
+ancombc2.as.pb = ancombc2(
   as.pb,
   p_adj_method = "fdr",
-  fix_formula = "land_use_st",
+  fix_formula = "site",
   tax_level = NULL,
   alpha = 0.05,
   verbose = TRUE,
@@ -764,7 +990,7 @@ ancombc2.as.pb <- ancombc2(
   ref
 )
 
-ancombc2.ns.pb.t2 = ancombc2(ns.pb.t2, p_adj_method = "fdr", fix_formula = "land_use", tax_level = NULL,
+ancombc2.ns.pb.t2 = ancombc2(ns.pb.t2, p_adj_method = "fdr", fix_formula = "site", tax_level = NULL,
                              alpha = 0.05, verbose = T, dunnet = F, pairwise = F)
 
 
@@ -802,18 +1028,17 @@ res.ancombc2.as.pb.t2.filt.df = merge(res.ancombc2.as.pb.t2.filt, tt.as.pb, by.y
 write.csv(res.ancombc2.as.pb.t1.filt.df, "res_ancombc2_perlenbach_T1.csv")
 write.csv(res.ancombc2.as.pb.t2.filt.df, "res_ancombc2_perlenbach_T2.csv")
 
-phyla.colors <- c(
-  "Acidobacteriota"   = "#556B2F",  # dark olive green
-  "Actinomycetota"  = "#8B7500",  # dark golden brown
-  "Bacteroidota"      = "#305A91",  # desaturated dark blue
-  "Deinococcota"      = "#8B2323",  # dark brick red
-  "Gemmatimonadota"   = "#2E8B57",  # deep sea green
-  "Myxococcota"       = "#5E3C99",  # muted dark purple
-  "Nitrospirota"      = "#7B3F61",  # dark muted pink-purple
-  "Pseudomonadota"    = "#8B4513"   # saddle brown
-)
+phyla.colors = c(
+  "Acidobacteriota"= "olivedrab4",
+  "Actinobacteriota"= "goldenrod3",
+  "Bacteroidota"= "royalblue4",
+  "Cyanobacteriota"= "cyan4",
+  "Deinococcota" = "firebrick4",
+  "Gemmatimonadota"= "forestgreen",
+  "Myxococcota" = "purple4",
+  "Nitrospirota"= "orchid4",
+  "Pseudomonadota"= "salmon4")
 
-setwd("/Dokumente und Einstellungen/RubenMartinezCuesta/Desktop/periphyton_subset_brief_report/")
 anbc2.as.t1 = read.csv("res_ancombc2_AS_T1_wt.csv")
 anbc2.as.t2 = read.csv("res_ancombc2_AS_T2_wt.csv")
 anbc2.ns.t1 = read.csv("res_ancombc2_NS_T1_wt.csv")
@@ -824,57 +1049,51 @@ anbc2.as.t2$Taxa= forcats::fct_reorder(anbc2.as.t2$Taxa, anbc2.as.t2$LFC, .desc 
 anbc2.ns.t1$Taxa= forcats::fct_reorder(anbc2.ns.t1$Taxa, anbc2.ns.t1$LFC, .desc = TRUE)
 anbc2.ns.t2$Taxa= forcats::fct_reorder(anbc2.ns.t2$Taxa, anbc2.ns.t2$LFC, .desc = TRUE)
 
-comparisons.order = c("FOvsEO", "FOvsIO", "EOvsFO", "IOvsFO")
+comparisons.order = c("FOvsEO", "IOvsFO", "IOvsEO")
 
 #custom_palette = c("burlywood","darkseagreen", "springgreen4", "darkorange4")
 
 daa.as.t1 = ggplot(anbc2.as.t1, aes(x = LFC, y = Taxa)) + 
   geom_point(
     aes(fill = Phylum, shape = comparison, color = Phylum), size = 3.5, stroke = 0.1, alpha = 0.6) +
+  ggpubr::theme_pubclean() +
   scale_fill_manual(values = phyla.colors, drop = FALSE) +
   scale_color_manual(values = phyla.colors) +  # Hide color legend, just for fill
-  scale_shape_manual(values = c(21, 24)) +
-  theme(panel.grid.major = element_line(linetype = 1, color = "grey"),
-        panel.background = element_blank(),
-        legend.text = element_text(size = 10),
-        axis.text.y = element_text(face = "italic")) +
+  scale_shape_manual(values = c(21, 23, 24)) +
+  theme(panel.background = element_blank(),
+        legend.text = element_text(family = "Arial", face = "italic", size = 11),
+        axis.text.y = element_text(family = "Arial", face = "italic", size = 11)) +
   ylab("Taxa") +
   xlab("LFC") +
-  ggpubr::theme_pubclean() +
-  labs(title = "AS T1") +
-  geom_vline(xintercept = c(-3, -0.5, 0, 0.5, 3), 
+  labs(title = "DB T1") +
+  geom_vline(xintercept = c(-4, -0.5, 0, 0.5, 4), 
              linetype = c("solid", "dashed", "solid", "dashed", "solid"), 
              size = 0.5) +
-  xlim(-3, 3) +
-  scale_x_continuous(breaks = c(-3, -2, -1, 0, 1, 2, 3)) +
-  annotate("text", x = -1.5, y = Inf, label = "Forest", vjust = 1, size = 3) +
-  annotate("text", x = 1.5, y = Inf, label = "Extensive Intensive", vjust = 1, size = 3)
+  xlim(-4, 4) +
+  scale_x_continuous(breaks = c(-4,-3, -2, -1, 0, 1, 2, 3, 4))
   
 daa.as.t1
 
 daa.as.t2 = ggplot(anbc2.as.t2, aes(x = LFC, y = Taxa)) + 
   geom_point(
     aes(fill = Phylum, shape = comparison, color = Phylum), size = 3.5, stroke = 0.1, alpha = 0.6) +
+  ggpubr::theme_pubclean() +
   scale_fill_manual(values = phyla.colors, drop = FALSE) +
   scale_color_manual(values = phyla.colors) +  # Hide color legend, just for fill
-  scale_shape_manual(values = c(21, 24)) +
-  theme(panel.grid.major = element_line(linetype = 1, color = "grey"),
-        panel.background = element_blank(),
-        legend.text = element_text(size = 10),
-        axis.text.y = element_text(face = "italic")) +
+  scale_shape_manual(values = c(21, 23, 24)) +
+  theme(panel.background = element_blank(),
+        legend.text = element_text(family = "Arial", face = "italic", size = 11),
+        axis.text.y = element_text(family = "Arial", face = "italic", size = 11)) +
   ylab("Taxa") +
   xlab("LFC") +
-  ggpubr::theme_pubclean() +
-  labs(title = "AS T2") +
+  labs(title = "DB T2") +
   geom_vline(xintercept = 0.5, size = 0.5, linetype = "dashed") +
   geom_vline(xintercept = -0.5, size = 0.5, linetype = "dashed") +
   geom_vline(xintercept = 0, size = 0.5) + 
-  xlim(-4, 4) + 
+  xlim(-4.5, 4) + 
   geom_vline(xintercept = -4.5, size = 0.5) + 
-  geom_vline(xintercept = 3.5, size = 0.5) +
-  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4)) +
-  annotate("text", x = -2, y = Inf, label = "Forest", vjust = 1, size = 3) +
-  annotate("text", x = 2, y = Inf, label = "Extensive Intensive", vjust = 1, size = 3)
+  geom_vline(xintercept = 4, size = 0.5) +
+  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))
 
 daa.as.t2
 
@@ -884,52 +1103,46 @@ both.as
 daa.ns.t1 = ggplot(anbc2.ns.t1, aes(x = LFC, y = Taxa)) + 
   geom_point(
     aes(fill = Phylum, shape = comparison, color = Phylum), size = 3.5, stroke = 0.1, alpha = 0.6) +
+  ggpubr::theme_pubclean() +
   scale_fill_manual(values = phyla.colors, drop = FALSE) +
   scale_color_manual(values = phyla.colors) +  # Hide color legend, just for fill
-  scale_shape_manual(values = c(21, 24)) +
-  theme(panel.grid.major = element_line(linetype = 1, color = "grey"),
-        panel.background = element_blank(),
-        legend.text = element_text(size = 10),
-        axis.text.y = element_text(face = "italic")) +
+  scale_shape_manual(values = c(21, 23, 24)) +
+  theme(panel.background = element_blank(),
+        legend.text = element_text(family = "Arial", face = "italic", size = 11),
+        axis.text.y = element_text(family = "Arial", face = "italic", size = 11)) +
   ylab("Taxa") +
   xlab("LFC") +
-  ggpubr::theme_pubclean() +
-  labs(title = "NS T1") +
+  labs(title = "MB T1") +
   geom_vline(xintercept = 0.5, size = 0.5, linetype = "dashed") +
   geom_vline(xintercept = -0.5, size = 0.5, linetype = "dashed") +
   geom_vline(xintercept = 0, size = 0.5) + 
-  xlim(-3, 3.5) + 
-  geom_vline(xintercept = -3, size = 0.5) + 
-  geom_vline(xintercept = 3.5, size = 0.5) +
-  scale_x_continuous(breaks = c(-3, -2, -1, 0, 1, 2, 3)) +
-  annotate("text", x = -1.5, y = Inf, label = "Forest", vjust = 1, size = 3) +
-  annotate("text", x = 1.75, y = Inf, label = "Extensive Intensive", vjust = 1, size = 3)
+  xlim(-6, 4.5) + 
+  geom_vline(xintercept = -7, size = 0.5) + 
+  geom_vline(xintercept = 5, size = 0.5) +
+  scale_x_continuous(breaks = c(-6, -5,-4,-3, -2, -1, 0, 1, 2, 3, 4))
 
 daa.ns.t1
 
 daa.ns.t2 = ggplot(anbc2.ns.t2, aes(x = LFC, y = Taxa)) + 
   geom_point(
     aes(fill = Phylum, shape = comparison, color = Phylum), size = 3.5, stroke = 0.1, alpha = 0.6) +
+  ggpubr::theme_pubclean() +
   scale_fill_manual(values = phyla.colors, drop = FALSE) +
   scale_color_manual(values = phyla.colors) +  # Hide color legend, just for fill
-  scale_shape_manual(values = c(21, 24)) +
-  theme(panel.grid.major = element_line(linetype = 1, color = "grey"),
-        panel.background = element_blank(),
-        legend.text = element_text(size = 10),
-        axis.text.y = element_text(face = "italic")) +
+  scale_shape_manual(values = c(21, 23, 24)) +
+  theme(panel.background = element_blank(),
+        legend.text = element_text(family = "Arial", face = "italic", size = 11),
+        axis.text.y = element_text(family = "Arial", face = "italic", size = 11)) +
   ylab("Taxa") +
   xlab("LFC") +
-  ggpubr::theme_pubclean() +
-  labs(title = "NS T2") +
+  labs(title = "MB T2") +
   geom_vline(xintercept = 0.5, size = 0.5, linetype = "dashed") +
   geom_vline(xintercept = -0.5, size = 0.5, linetype = "dashed") +
   geom_vline(xintercept = 0, size = 0.5) + 
-  xlim(-2, 4) + 
-  geom_vline(xintercept = -2, size = 0.5) + 
-  geom_vline(xintercept = 4, size = 0.5) +
-  scale_x_continuous(breaks = c(-2, -1, 0, 1, 2, 3, 4)) +
-  annotate("text", x = -1, y = Inf, label = "Forest", vjust = 1, size = 3) +
-  annotate("text", x = 2, y = Inf, label = "Extensive Intensive", vjust = 1, size = 3)
+  xlim(-4, 4) + 
+  geom_vline(xintercept = -4, size = 0.5) + 
+  geom_vline(xintercept = 4.5, size = 0.5) +
+  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))
 
 daa.ns.t2
 
@@ -943,13 +1156,17 @@ daa.ns.t2
 both.ns = ggpubr::ggarrange(daa.ns.t1, daa.ns.t2, ncol = 2, labels = c("B"), align = "v", common.legend = T)
 both.ns
 
+pdf("Fig_3_DB_MB_1125", width = 9, height = 12)
+
 ggpubr::ggarrange(
   daa.as.t1, daa.as.t2, daa.ns.t1, daa.ns.t2, 
   nrow = 2, ncol = 2, 
   labels = c("A", "B", "C", "D"), 
-  align = "h", 
-  common.legend = FALSE
+  align = "hv", 
+  common.legend = TRUE
 )
+
+dev.off()
 
 #Co-occurrence network analyses
 #Subsetting the sample
@@ -1645,156 +1862,3 @@ scat.doc = ggplot(daily_avg, aes(x = Date, y = Daily_Avg, color = Type, group = 
 scat.doc
 
 conet.as.ott.in.t1 = SpiecEasi::spiec.easi(as.ott.in.t1)
-
-
-######PCoA with Taxa as vectors
-library(vegan)
-phy.genus = tax_glom(as.ott, taxrank = "Genus")
-bray.as.ott = phyloseq::distance(as.ott, method = "bray")
-pcoa.res = ape::pcoa(bray.as.ott)
-pcoa.as.ott.df = data.frame(SampleID = rownames(pcoa.res$vectors),
-                            Axis1 = pcoa.res$vectors[, 1],
-                            Axis2 = pcoa.res$vectors[, 2])
-
-sd.ott.as = read.csv("sd_as_ott.csv", row.names = 1)
-
-
-pcoa.df = merge(pcoa.as.ott.df, sd.ott.as, by.x = "SampleID", by.y = "row.names")
-pcoa.df$SampleID.y = NULL
-pcoa.df$sample_type = NULL
-#pcoa.df$SampleID = NULL
-
-phy.genus = tax_glom(as.ott, taxrank = "genus")
-asvs.as.ott = otu_table(as.ott) %>% as.data.frame() %>% t()
-all(rownames(sample_data(as.ott)) %in% rownames(asvs.as.ott))
-
-asvs.hel.as.ott = decostand(asvs.as.ott, method = "hellinger")
-asvs.var = apply(asvs.hel.as.ott, 2, var)
-asvs.hel.filtered = asvs.hel.as.ott[, order(asvs.var, decreasing = TRUE)[1:5000]]
-env.fit = envfit(pcoa.res$vectors, asvs.hel.filtered, permutations = 999)
-# Extract p-values
-pvals = env.fit$vectors$pvals
-padj = p.adjust(pvals, method = "fdr")
-signif.vars = names(padj[padj < 0.05])
-
-# Filter the vectors
-significant.vectors = env.fit$vectors$arrows[signif.vars, ]
-
-env.vectors = as.data.frame(scores(significant.vectors))
-env.vectors$Variable = rownames(env.vectors)
-
-lu.colors = c("intensive" = "#E69F00", "forest" = "#009E73", "extensive" = "#999999")
-land.use = sample_data(as.ott)$land_use
-st = sample_data(as.ott)$st
-library(ggplot2)
-library(ggpubr)
-library(ggrepel)
-
-# Compute length only for the significant vectors
-env.vectors$Length <- env.fit$vectors$r[rownames(env.vectors)]
-env.vectors$x_end <- env.vectors$Axis.1 * env.vectors$Length * 0.5
-env.vectors$y_end <- env.vectors$Axis.2 * env.vectors$Length * 0.5
-
-# Get Genus from tax_table only for significant taxa
-tax_table = as.data.frame(tax_table(as.ott))
-env.vectors$Genus <- tax_table[rownames(env.vectors), "Genus"]
-
-# Filter out NA Genus
-env.vectors <- env.vectors[!is.na(env.vectors$Genus), ]
-env.vectors <- env.vectors[env.vectors$Length > 0.75, ]
-
-tax_table = as.data.frame(tax_table(as.ott))
-env.vectors$Genus <- tax_table[rownames(env.vectors), "Genus"]
-env.vectors <- env.vectors[!is.na(env.vectors$Genus), ]
-# Then plot:
-pcoa.as.ott = ggplot(pcoa.df, aes(x = Axis1, y = Axis2)) +
-  geom_point(aes(color = factor(land_use), shape = factor(st)), size = 3, alpha = 0.6) +
-  scale_color_manual(values = lu.colors) +
-  geom_segment(data = env.vectors,
-               aes(x = 0, y = 0, xend = x_end, yend = y_end),
-               arrow = arrow(length = unit(0.2, "cm")), color = "black") +
-  geom_text_repel(data = env.vectors,
-                  aes(x = x_end, y = y_end, label = Genus),
-                  size = 4) +
-  labs(x = paste0("PCoA1 (", round(pcoa.res$values$Relative_eig[1] * 100, 2), "%)"),
-       y = paste0("PCoA2 (", round(pcoa.res$values$Relative_eig[2] * 100, 2), "%)"),
-       title = "PCoA AS") +
-  scale_x_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
-  scale_y_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
-  theme_bw()
-pcoa.as.ott
-
-###PCoA PB AS with Taxa
-blik.pb = subset_samples(phy.blik2.css, stream == "perlenbach")
-as.pb = subset_samples(blik.pb, sample_type == "AS")
-
-bray.as.pb = phyloseq::distance(as.pb, method = "bray")
-pcoa.res = ape::pcoa(bray.as.pb)
-pcoa.as.pb.df = data.frame(SampleID = rownames(pcoa.res$vectors),
-                            Axis1 = pcoa.res$vectors[, 1],
-                            Axis2 = pcoa.res$vectors[, 2])
-
-sd.pb.as = read.csv("sd_pb_as.csv", row.names = 1)
-
-
-pcoa.df = merge(pcoa.as.pb.df, sd.pb.as, by.x = "SampleID", by.y = "row.names")
-pcoa.df$SampleID.y = NULL
-pcoa.df$sample_type = NULL
-#pcoa.df$SampleID = NULL
-
-asvs.as.pb = otu_table(as.pb) %>% as.data.frame() %>% t()
-all(rownames(sample_data(as.pb)) %in% rownames(asvs.as.pb))
-
-asvs.hel.as.pb = decostand(asvs.as.pb, method = "hellinger")
-asvs.var = apply(asvs.hel.as.pb, 2, var)
-asvs.hel.filtered = asvs.hel.as.pb[, order(asvs.var, decreasing = TRUE)[1:5000]]
-env.fit = envfit(pcoa.res$vectors, asvs.hel.filtered, permutations = 999)
-# Extract p-values
-pvals = env.fit$vectors$pvals
-padj = p.adjust(pvals, method = "fdr")
-signif.vars = names(padj[padj < 0.05])
-
-# Filter the vectors
-significant.vectors = env.fit$vectors$arrows[signif.vars, ]
-
-env.vectors = as.data.frame(scores(significant.vectors))
-env.vectors$Variable = rownames(env.vectors)
-
-lu.colors = c("intensive" = "#E69F00", "forest" = "#009E73", "extensive" = "#999999")
-land.use = sample_data(as.ott)$land_use
-st = sample_data(as.ott)$st
-library(ggplot2)
-library(ggpubr)
-library(ggrepel)
-
-# Compute length only for the significant vectors
-env.vectors$Length <- env.fit$vectors$r[rownames(env.vectors)]
-env.vectors$x_end <- env.vectors$Axis.1 * env.vectors$Length * 0.5
-env.vectors$y_end <- env.vectors$Axis.2 * env.vectors$Length * 0.5
-
-# Get Genus from tax_table only for significant taxa
-tax_table = as.data.frame(tax_table(as.pb))
-env.vectors$Genus <- tax_table[rownames(env.vectors), "Genus"]
-
-# Filter out NA Genus
-env.vectors <- env.vectors[!is.na(env.vectors$Genus), ]
-env.vectors <- env.vectors[env.vectors$Length > 0.75, ]
-
-# Then plot:
-pcoa.as.pb = ggplot(pcoa.df, aes(x = Axis1, y = Axis2)) +
-  geom_point(aes(color = factor(land_use), shape = factor(st)), size = 3, alpha = 0.6) +
-  scale_color_manual(values = lu.colors) +
-  geom_segment(data = env.vectors,
-               aes(x = 0, y = 0, xend = x_end, yend = y_end),
-               arrow = arrow(length = unit(0.2, "cm")), color = "black") +
-  geom_text_repel(data = env.vectors,
-                  aes(x = x_end, y = y_end, label = Genus),
-                  size = 4) +
-  labs(x = paste0("PCoA1 (", round(pcoa.res$values$Relative_eig[1] * 100, 2), "%)"),
-       y = paste0("PCoA2 (", round(pcoa.res$values$Relative_eig[2] * 100, 2), "%)"),
-       title = "PCoA AS") +
-  scale_x_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
-  scale_y_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
-  theme_bw()
-pcoa.as.pb
-
