@@ -7,5 +7,5 @@
 
 ### File Descriptions:
 - `manuscript_biofilm_script.R`: Script in R of 16S rRNA amplicons processing from sequencing to phyloseq object + further analyses (alpha, beta div, ANCOM-BC2, co-occurrence networks...)
-- `iCAMP_script_biofilms.R`: ...
-- `metadata_blik_2_exp_0424.csv`: ...
+- `iCAMP_script_biofilms.R`: Script in R of iCAMP analysis of the 16S rRNA amplicons dataset
+- `metadata_blik_2_exp_0424.csv`: Metadata of the dataset used to create the phyloseq object. Import into manuscript_biofilm_script.R
