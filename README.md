@@ -3,10 +3,9 @@
 > Authors: Rubén Martínez-Cuesta et al. | Published in: [Journal Name]
 
 ---
-## 📂 Repository Contents (Level 2)
-*List of the main files and their purpose (using a table or list).*
+## 📂 Repository Contents
 
 ### File Descriptions:
-- `manuscript_biofilm_script.R`: ...
+- `manuscript_biofilm_script.R`: Script in R of 16S rRNA amplicons processing from sequencing to phyloseq object + further analyses (alpha, beta div, ANCOM-BC2, co-occurrence networks...)
 - `iCAMP_script_biofilms.R`: ...
 - `metadata_blik_2_exp_0424.csv`: ...
