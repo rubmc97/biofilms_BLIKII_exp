@@ -2,6 +2,7 @@ library(phyloseq)
 library(decontam)
 library(dplyr)
 library(vegan)
+library(microbiome)
 library(ggplot2)
 library(ggpubr)
 library(ggrepel)
@@ -13,6 +14,7 @@ library(dada2)
 library(plotly)
 library(knitr)
 library(Biostrings)
+library(NetCoMi)
 
 #Setting the path where the files are after the fastp processing to remove the adapters
 setwd("/home/comi/ruben.martinez/biofilm_samples/")
@@ -26,15 +28,15 @@ fnRs = sort(list.files(path, pattern="_R2_fastp.fastq.gz", full.names = TRUE))
 sample.names = sapply(strsplit(basename(fnFs), "_"), `[`, 1)
 sample.names
 
-forwplot = ggplotly(plotQualityProfile(fnFs[1:13], n = 1e+05, aggregate = TRUE) +
+forwplot = ggplotly(plotQualityProfile(fnFs[1:113], n = 1e+05, aggregate = TRUE) +
                       geom_hline(yintercept=c(20,25,30), color=c("red","blue","green"), size=0.5),
                     width =750)
 forwplot
 
-revqplot = ggplotly(plotQualityProfile(fnRs[1:13], n = 1e+05, aggregate = T) + 
+revqplot = ggplotly(plotQualityProfile(fnRs[1:113], n = 1e+05, aggregate = T) + 
                       geom_hline(yintercept=c(20,25,30),
                                  color=c("red","blue","green"),
-                                 size=0.2)) %>% ggplotly(800)
+                                 size=0.2))
 revqplot
 
 # Place filtered files in filtered/ subdirectory
@@ -79,7 +81,7 @@ dim(seqtab)
 # Inspect distribution of sequence lengths
 table(nchar(getSequences(seqtab)))
 
-seqtab2 = seqtab[,nchar(colnames(seqtab)) %in% 285:335] #determine depending on the previous step
+seqtab2 = seqtab[,nchar(colnames(seqtab)) %in% 285:335] #determine size of the amplicon based on the previous step
 
 #Remove chimeric sequences
 seqtab.nochim = removeBimeraDenovo(seqtab2, method="consensus", multithread=TRUE, verbose=TRUE)
@@ -96,7 +98,7 @@ colnames(track) = c("input", "filtered", "denoisedF", "denoisedR", "merged", "no
 rownames(track) = sample.names
 head(track)
 
-write.csv(track, "/home/comi/ruben.martinez/track_table_biofilms_0624.csv")
+write.csv(track, "/home/comi/ruben.martinez/biofilm_samples/track_table_biofilms_0624.csv")
 #Assign taxonomy using DECIPHER and the trained classifier from the SILVA database
 
 library(DECIPHER); packageVersion("DECIPHER")
@@ -130,9 +132,6 @@ ps = merge_phyloseq(phyloseq_biofilms, dna)
 taxa_names(phyloseq_biofilms) = paste0("ASV", seq(ntaxa(phyloseq_biofilms)))
 phyloseq_biofilms
 
-
-  load("phyloseq_biofilms_no_filt_150425.RData")
-  
 track = read.csv("track_table_biofilms_0425.csv", row.names = 1)
 track$SampleID = row.names(track)
 sd = as.matrix.data.frame(sample_data(phyloseq_biofilms))
@@ -192,48 +191,48 @@ class(tab) = "matrix"
 tab = t(tab)
 rare = rarecurve(tab, step=10000, lwd=2, ylab="ASVs",  label=F)
 
+#Normalization using the CSS method
 phy.blik2.css = microbiomeMarker::normalize(phyloseq.biofilms.filt, method = "CSS")
 phy.blik2.css = prune_taxa(taxa_sums(phy.blik2.css) > 0, phy.blik2.css)
 
+#Saving the Normalized phyloseq object
 save(phy.blik2.css,
      file = paste("phy_biofilms_norm_16042025",
                   ".RData",
                   sep = ""))
 
-load("phy_biofilms_norm_16042025.RData")
-##calculate the total ASVs number per sample and plot the results
-asvs.number = microbiome::alpha(phy.blik2.css, "observed")
+###Alpha diversity calculation
+asvs.number = alpha(phy.blik2.css, "observed")
 asvs.number$SampleID = row.names(asvs.number)
-sd.blik2 = sample_data(phy.blik2.css)
-sd.blik2 = as.matrix.data.frame(sd.blik2)
+sd.blik2 = as.matrix.data.frame(sample_data(phy.blik2.css))
 
-df.asvs.number = merge(asvs.number, sd.blik2, by.y = "SampleID")
+df.asvs.number = merge(asvs.number, sd.blik2, by = "SampleID")
 
 alpha.ott = subset.data.frame(df.asvs.number, stream == "otterbach")
-# Load the dplyr package
-library(dplyr)
 
 # Assuming your data frame is named df
 df_avg = alpha.ott %>%
   group_by(site, st, sample_type) %>%
   summarise(avg_observed = mean(observed, na.rm = TRUE))
 
-as.alpha.ott = subset.data.frame(alpha.ott, sample_type =="AS")
-ns.alpha.ott = subset.data.frame(alpha.ott, sample_type =="NS")
+as.alpha.ott = subset.data.frame(alpha.ott, sample_type =="DB")
+ns.alpha.ott = subset.data.frame(alpha.ott, sample_type =="MB")
 
-#plot for the Otterbach dataset
+#set colours and custom order for the Otterbach samples
 custom_order = c("EO", "IO", "FO")
-
 colors = c("#999999", "#009E73", "#E69F00")
 
+#Plot alpha diversity in the Otterbach samples
 as.plot.alpha.ott = ggplot(as.alpha.ott, aes(x = factor(site, levels = custom_order), y = observed, fill = land_use)) +
   geom_boxplot(alpha = 0.5, width = 0.5) +
-  geom_jitter(size = 1, shape=16, alpha = 0.6) +
+  geom_jitter(size = 1, shape = 16, alpha = 0.6) +
   facet_grid( ~ st) +
   scale_fill_manual(values = colors) +  # Set custom colors
-  ggpubr::theme_pubclean() + labs(x = "Site", y = "Observed ASVs") +
-  ggpubr::stat_compare_means(comparisons = list(c("EO", "IO"), c("IO", "FO"), c("EO", "FO")), label = "p.adj", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
-  theme(
+  ggpubr::theme_pubclean() +
+labs(x = "Site", y = "Observed ASVs") +
+  ggpubr::stat_compare_means(comparisons = list(c("EO", "IO"), c("IO", "FO"), c("EO", "FO")),
+                             label = "p.adj", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
+theme(
     axis.line = element_line(color = "black"),  # Add x and y axis lines
     axis.ticks = element_line(color = "black"),  # Add axis ticks
     axis.text = element_text(color = "black")   # Ensure axis text is visible
@@ -243,7 +242,7 @@ as.plot.alpha.ott
 
 ns.plot.alpha.ott = ggplot(ns.alpha.ott, aes(x = factor(site, levels = custom_order), y = observed, fill = land_use)) +
   geom_boxplot(alpha = 0.5, width = 0.5) +
-  geom_jitter(size = 1, shape=16, alpha = 0.6) +
+  geom_jitter(size = 1, shape = 16, alpha = 0.6) +
   facet_grid( ~ st) +
   scale_fill_manual(values = colors) +  # Set custom colors
   ggpubr::theme_pubclean() + labs(x = "Site", y = "Observed ASVs") +
@@ -256,17 +255,17 @@ ns.plot.alpha.ott = ggplot(ns.alpha.ott, aes(x = factor(site, levels = custom_or
   scale_y_continuous(limits = c(0, 2000))
 ns.plot.alpha.ott
 
-as.ns.ott = ggpubr::ggarrange(as.plot.alpha.ott, ns.plot.alpha.ott, ncol = 2, labels=c("A"), common.legend = T)
+as.ns.ott = ggpubr::ggarrange(as.plot.alpha.ott, ns.plot.alpha.ott, ncol = 2, labels  =c("A"), common.legend = T)
 as.ns.ott
 
 #observed ASVs plot of the Perlenbach dataset
 alpha.pb = subset.data.frame(df.asvs.number, stream == "perlenbach")
-as.alpha.pb = subset.data.frame(alpha.pb, sample_type == "AS")
-ns.alpha.pb = subset.data.frame(alpha.pb, sample_type == "NS")
-#plot for the Perlenbach dataset
+as.alpha.pb = subset.data.frame(alpha.pb, sample_type == "DB")
+ns.alpha.pb = subset.data.frame(alpha.pb, sample_type == "MB")
+
+#set colours and custom order for the Perlenbach samples
 colors_pb = c("#999999", "#009E73")
-facet_order = c("AS", "NS")
-custom_order_pb = c("EP", "FO")
+custom_order_pb = c("EP", "FP")
 
 alpha.pb$sample_type = factor(alpha.pb$sample_type, levels = facet_order)
 
@@ -277,7 +276,7 @@ as.plot.alpha.pb = ggplot(as.alpha.pb, aes(x = factor(site, levels = custom_orde
   labs(x = "Site", y = "Observed ASVs") +
   scale_fill_manual(values = colors_pb) +  # Set custom colors
   ggpubr::theme_pubclean() +
-  ggpubr::stat_compare_means(comparisons = list(c("EP", "FO")), label = "p.adj", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
+  ggpubr::stat_compare_means(comparisons = list(c("EP", "FP")), label = "p.adj", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
   theme(
     axis.line = element_line(color = "black"),  # Add x and y axis lines
     axis.ticks = element_line(color = "black"),  # Add axis ticks
@@ -293,7 +292,7 @@ ns.plot.alpha.pb = ggplot(ns.alpha.pb, aes(x = factor(site, levels = custom_orde
   labs(x = "Site", y = "Observed ASVs") +
   scale_fill_manual(values = colors_pb) +  # Set custom colors
   ggpubr::theme_pubclean() +
-  ggpubr::stat_compare_means(comparisons = list(c("EP", "FO")), label = "p.adj", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
+  ggpubr::stat_compare_means(comparisons = list(c("EP", "FP")), label = "p.adj", hide.ns = TRUE, method = "wilcox.test", p.adjust.methods = "fdr") +
   theme(
     axis.line = element_line(color = "black"),  # Add x and y axis lines
     axis.ticks = element_line(color = "black"),  # Add axis ticks
@@ -304,34 +303,37 @@ ns.plot.alpha.pb
 
 as.ns.pb = ggpubr::ggarrange(as.plot.alpha.pb, ns.plot.alpha.pb, ncol = 2, common.legend = T)
 as.ns.ott.pb = ggpubr::ggarrange(as.ns.ott, as.ns.pb, nrow = 2, common.legend = T)
-as.ns.ott.pb
 
-#Ordination with PCoA and dissimilarity with Bray-Curtis
+pdf("Fig_2A_alpha_div", width = 9, height = 12)
+as.ns.ott.pb
+dev.off()
+
+###Ordination with PCoA
 blik.ott = subset_samples(phy.blik2.css, stream == "otterbach")
-as.ott = subset_samples(blik.ott, sample_type == "AS")
-ns.ott = subset_samples(blik.ott, sample_type == "NS")
+as.ott = subset_samples(blik.ott, sample_type == "DB")
+ns.ott = subset_samples(blik.ott, sample_type == "MB")
 as.ott = prune_taxa(taxa_sums(as.ott) > 0, as.ott)
 ns.ott = prune_taxa(taxa_sums(ns.ott) > 0, ns.ott)
 
+#Dissimilarity calculation with the Bray-Curtis distance
 bray.as.ott = phyloseq::distance(as.ott, method = "bray")
+
 pcoa.res = ape::pcoa(bray.as.ott)
 pcoa.as.ott.df = data.frame(SampleID = rownames(pcoa.res$vectors),
                             Axis1 = pcoa.res$vectors[, 1],
                             Axis2 = pcoa.res$vectors[, 2])
 
 sd.ott.as = sample_data(as.ott) %>% as.matrix.data.frame()
-#write.csv(sd.ott.as, "sd_as_ott.csv")
-#sd.ott.as = read.csv("sd_as_ott.csv", row.names = 1)
-
-
 pcoa.df = merge(pcoa.as.ott.df, sd.ott.as, by.x = "SampleID", by.y = "row.names")
 pcoa.df$SampleID.y = NULL
 pcoa.df$sample_type = NULL
 pcoa.df$SampleID = NULL
 
+#Load physicochemical paramters data
 nut.ott.as = read.csv("nuts_as_ott.csv", row.names = 1)
 all(rownames(sample_data(as.ott)) %in% rownames(nut.ott.as))
 
+#Permutation test
 env.fit = envfit(pcoa.res$vectors, nut.ott.as, permutations = 999)
 pvals = env.fit$vectors$pvals
 # Get names of variables with p < 0.05
@@ -344,7 +346,7 @@ env.vectors$Length = env.fit$vectors$r
 env.vectors$x_end = env.vectors$Axis.1 * env.vectors$Length * 0.5
 env.vectors$y_end = env.vectors$Axis.2 * env.vectors$Length * 0.5
 
-# Keep only significant ones
+# Keep only significant vectors
 env.vectors = env.vectors[env.vectors$Variable %in% significant.vars, ]
 
 # Calculate angles in radians
@@ -352,7 +354,6 @@ env.vectors$angle_rad <- atan2(env.vectors$y_end, env.vectors$x_end)
 
 # Convert to degrees (optional)
 env.vectors$angle_deg <- env.vectors$angle_rad * (180 / pi)
-
 
 lu.colors = c("intensive" = "#E69F00", "forest" = "#009E73", "extensive" = "#999999")
 land.use = sample_data(as.ott)$land_use
@@ -376,6 +377,7 @@ pcoa.as.ott = ggplot(pcoa.df, aes(x = Axis1, y = Axis2)) +  # Adjust "LandUse" a
   scale_y_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25))
 pcoa.as.ott
 
+#Beta dispersion
 bd.as.ott = betadisper(bray.as.ott, sample_data(as.ott)$land_use)
 
 df.as.ott = data.frame(
@@ -470,7 +472,7 @@ pcoa.ns.ott = ggplot(pcoa.df, aes(x = Axis1, y = Axis2)) +  # Adjust "LandUse" a
         strip.background = element_blank()) +
   labs(x = paste0("PCoA1 (", round(pcoa.res$values$Relative_eig[1] * 100, 2), "%)"),
        y = paste0("PCoA2 (", round(pcoa.res$values$Relative_eig[2] * 100, 2), "%)"),
-       title = "PCoA NS") + scale_x_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
+       title = "PCoA MB") + scale_x_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25)) +
   scale_y_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5, 0.5, by = 0.25))
 pcoa.ns.ott
 #Beta dispersion analysis
@@ -504,8 +506,8 @@ bp.beta.ns.ott = ggplot(df.beta.ns.ott, aes(x = land_use, y = Distance_to_centro
 bp.beta.ns.ott
 
 blik.pb = subset_samples(phy.blik2.css, stream == "perlenbach")
-as.pb = subset_samples(blik.pb, sample_type == "AS")
-ns.pb = subset_samples(blik.pb, sample_type == "NS")
+as.pb = subset_samples(blik.pb, sample_type == "DB")
+ns.pb = subset_samples(blik.pb, sample_type == "MB")
 as.pb = prune_taxa(taxa_sums(as.pb) > 0, as.pb)
 ns.pb = prune_taxa(taxa_sums(ns.pb) > 0, ns.pb)
 
@@ -515,8 +517,8 @@ pcoa.res = ape::pcoa(bray.as.pb)
 pcoa.as.pb.df = data.frame(SampleID = rownames(pcoa.res$vectors),
                            Axis1 = pcoa.res$vectors[, 1],
                            Axis2 = pcoa.res$vectors[, 2])
-#write.csv(as.matrix.data.frame(sample_data(as.pb)), "sd_pb_as.csv")
-sd.pb.as = read.csv("sd_pb_as.csv", row.names = 1)
+
+sd.pb.as = as.matrix.data.frame(sample_data(as.pb))
 
 pcoa.df = merge(pcoa.as.pb.df, sd.pb.as, by.x = "SampleID", by.y = "row.names")
 row.names(pcoa.df) = pcoa.df$SampleID
@@ -532,7 +534,6 @@ pvals = env.fit$vectors$pvals
 padj = p.adjust(pvals, method = "fdr")
 significant.vars = names(padj[padj < 0.05])
 
-vec_lengths = env.fit$vectors$r 
 env.vectors = as.data.frame(env.fit$vectors$arrows)
 env.vectors$Variable = rownames(env.vectors)
 env.vectors$Length = env.fit$vectors$r
@@ -552,8 +553,6 @@ env.vectors$angle_deg = env.vectors$angle_rad * (180 / pi)
 env.vectors[, c("Variable", "Length", "x_end", "y_end", "angle_deg")]
 
 #write.csv(env.vectors, "DB_PB_PCOA_env_vectors.csv")
-
-
 
 lu.colors = c("forest" = "#009E73", "extensive" = "#999999")
 land.use = sample_data(as.pb)$land_use
@@ -610,8 +609,8 @@ pcoa.res = ape::pcoa(bray.ns.pb)
 pcoa.ns.pb.df = data.frame(SampleID = rownames(pcoa.res$vectors),
                            Axis1 = pcoa.res$vectors[, 1],
                            Axis2 = pcoa.res$vectors[, 2])
-#write.csv(as.matrix.data.frame(sample_data(ns.pb)), "sd_pb_ns.csv")
-sd.pb.ns = read.csv("sd_pb_ns.csv", row.names = 1)
+
+sd.pb.ns = as.matrix.data.frame(sample_data(ns.pb))
 
 pcoa.df = merge(pcoa.ns.pb.df, sd.pb.ns, by.x = "SampleID", by.y = "row.names")
 row.names(pcoa.df) = pcoa.df$SampleID
@@ -627,7 +626,6 @@ pvals = env.fit$vectors$pvals
 padj = p.adjust(pvals, method = "fdr")
 significant.vars = names(padj[padj < 0.05])
 
-vec_lengths = env.fit$vectors$r 
 env.vectors = as.data.frame(env.fit$vectors$arrows)
 env.vectors$Variable = rownames(env.vectors)
 env.vectors$Length = env.fit$vectors$r
@@ -646,7 +644,7 @@ env.vectors$angle_deg = env.vectors$angle_rad * (180 / pi)
 # View the table
 env.vectors[, c("Variable", "Length", "x_end", "y_end", "angle_deg")]
 
-write.csv(env.vectors, "MB_PB_PCOA_env_vectors.csv")
+#write.csv(env.vectors, "MB_PB_PCOA_env_vectors.csv")
 
 lu.colors = c("forest" = "#009E73", "extensive" = "#999999")
 
@@ -743,10 +741,22 @@ ns.pb.t1 = prune_taxa(taxa_sums(ns.pb.t1) > 0, ns.pb.t1)
 ns.pb.t2 = subset_samples(ns.pb, st == "T2")
 ns.pb.t2 = prune_taxa(taxa_sums(ns.pb.t2) > 0, ns.pb.t2)
 
-#Running ANCOMBC2
-load("phyloseq_biofilms_filt_16042025.RData") #load the phyloseq object prior to CSS normalization
-
-sd = sample_data(as.ott)
+###Running ANCOMBC2
+ #using the Phyloseq object prior to the normalization with CSS!!!
+ott = subset_samples(phyloseq.biofilms.filt, stream == "otterbach")
+pb = subset_samples(phyloseq.biofilms.filt, stream == "perlenbach")
+as.ott = subset_samples(ott, sample_type == "DB")
+ns.ott = subset_samples(ott, sample_type == "MB")
+as.ott.t1 = subset_samples(as.ott, st == "T1")
+as.ott.t2 = subset_samples(as.ott, st == "T2")
+ns.ott.t1 = subset_samples(ns.ott, st == "T1")
+ns.ott.t2 = subset_samples(ns.ott, st == "T2")
+as.pb = subset_samples(pb, sample_type == "DB")
+ns.pb = subset_samples(pb, sample_type == "MB")
+as.pb.t1 = subset_samples(as.pb, st == "T1")
+as.pb.t2 = subset_samples(as.pb, st == "T2")
+ns.pb.t1 = subset_samples(ns.pb, st == "T1")
+ns.pb.t2 = subset_samples(ns.pb, st == "T2")
 
 # Make sure the variables are factors
 sample_data(as.ott.t1)$site = factor(sample_data(as.ott.t1)$site)
@@ -757,11 +767,11 @@ sample_data(as.ott.t2)$site = relevel(sample_data(as.ott.t2)$site, ref = "EO")
 
 #Run ANCOMBC2
 ancombc2.as.t1.eo.ref = ancombc2(as.ott.t1, p_adj_method = "fdr", fix_formula = "site", group = "site", tax_level = NULL,
-                          alpha = 0.05, verbose = F, dunnet = T, pairwise = F)
+                          alpha = 0.05, verbose = F, dunnet = F, pairwise = F)
 
 #Run ANCOMBC2
 ancombc2.as.t2.eo.ref = ancombc2(as.ott.t2, p_adj_method = "fdr", fix_formula = "site", group = "site", tax_level = NULL,
-                          alpha = 0.05, verbose = F, dunnet = T, pairwise = F)
+                          alpha = 0.05, verbose = F, dunnet = F, pairwise = F)
 
 res.ancombc2.as.t1.eo.ref = ancombc2.as.t1.eo.ref$res
 res.ancombc2.as.t2.eo.ref = ancombc2.as.t2.eo.ref$res
@@ -774,16 +784,18 @@ res.ancombc2.as.t1.eo.ref = res.ancombc2.as.t1.eo.ref[, c(3, 4, 12, 13, 21, 22, 
 tt.as.ott = as.data.frame(tax_table(as.ott))
 tt.as.ott$ASV = row.names(tt.as.ott)
 
-res.ancombc2.as.t1.eo.ref = res.ancombc2.as.t1.eo.ref %>%
+res.ancombc2.as.t1.fovseo = res.ancombc2.as.t1.eo.ref %>%
   filter((q_siteFO < 0.05 &
             passed_ss_siteFO == "TRUE" &
-            abs(lfc_siteFO) > 0.5) |
-           (q_siteIO < 0.05 &
-              passed_ss_siteIO == "TRUE" &
-              abs(lfc_siteIO) > 0.5))
+            abs(lfc_siteFO) > 0.5))
+
+res.a   passed_ss_siteFO == "TRUE" &
+            abs(lfc_siteFO) > 0.5))
 
 res.anbc2.as.t1.iovseo = res.ancombc2.as.t1.eo.ref %>%
-  filter((q_siteIO < 0.05 &
+  filter((q_siteIO < ncombc2.as.t2.fovseo = res.ancombc2.as.t2.eo.ref %>%
+  filter((q_siteFO < 0.05 &
+         0.05 &
               passed_ss_siteIO == "TRUE" &
               abs(lfc_siteIO) > 0.5))
 
@@ -795,202 +807,51 @@ res.anbc2.as.t2.iovseo = res.ancombc2.as.t2.eo.ref %>%
 df.res.anbc2.as.t1.iovseo = merge(res.anbc2.as.t1.iovseo, tt.as.ott, by = "ASV")
 df.res.anbc2.as.t2.iovseo = merge(res.anbc2.as.t2.iovseo, tt.as.ott, by = "ASV")
 
-write.csv(df.res.anbc2.as.t1.iovseo, "ancombc2_AS_T1.csv")
-write.csv(df.res.anbc2.as.t2.iovseo, "ancombc2_AS_T2.csv")
-
-res.ancombc2.as.t2_1 = res.ancombc2.as.t2 %>%
-  filter((p_land_use_stextensive.T2 < 0.05 &
-            abs(lfc_land_use_stextensive.T2) > 0.5) |
-           (p_land_use_stintensive.T2 < 0.05 &
-              abs(lfc_land_use_stintensive.T2) > 0.5))
-
-res.ancombc2.as.t1.mut = res.ancombc2.as.t1 %>%
-  pivot_longer(cols = c(lfc_land_useforest, lfc_land_useintensive_land_useforest), 
-               names_to = "lfc_source", values_to = "lfc_value") %>%
-  mutate(lfc_value = ifelse(lfc_source == "lfc_land_useforest", -lfc_value, lfc_value))
-
-res.ancombc2.as.t1.mut.long = res.ancombc2.as.t1.mut %>%
-  pivot_longer(
-    cols = starts_with("p_land_use"),
-    names_to = "contrast",
-    values_to = "p_value"
-  )
-
-#filtering the results for p value and lfc
-res.ancombc2.as.t1.mut.long = res.ancombc2.as.t1.mut.long %>%
-  filter(abs(p_value) < 0.05)
-
-res.ancombc2.as.t1.mut.long = res.ancombc2.as.t1.mut.long %>%
-  filter(abs(lfc_value) > 0.5)
-
-res.ancombc2.as.t1.mut.long.filt = res.ancombc2.as.t1.mut.long %>%
-  filter(
-    str_remove(contrast, "^[^_]+_") == str_remove(lfc_source, "^[^_]+_")
-  )
-
-tt.as.ott = as.data.frame(tax_table(as.ott))
-tt.as.ott$ASV = row.names(tt.as.ott)
-
-df.res.ancombc2.as.t1 = merge(res.ancombc2.as.t1_1, tt.as.ott, by.y = "ASV")
-
-ancombc2.as.t2 = ancombc2(as.ott.t2, p_adj_method = "fdr", fix_formula = "land_use", group = "land_use", tax_level = NULL, alpha = 0.05, verbose = F, dunnet = F, pairwise = T)
-
-res.ancombc2.as.t2 = ancombc2.as.t2$res_pair
-
-res.ancombc2.as.t2$ASV = res.ancombc2.as.t2$taxon
-
-res.ancombc2.as.t2 = res.ancombc2.as.t2[, c(2, 4, 11, 13, 14, 16, 23), drop = FALSE] #select columns of interest
-
-res.ancombc2.as.t2.mut = res.ancombc2.as.t2 %>%
-  pivot_longer(cols = c(lfc_land_useforest, lfc_land_useintensive_land_useforest), 
-               names_to = "lfc_source", values_to = "lfc_value") %>%
-  mutate(lfc_value = ifelse(lfc_source == "lfc_land_useforest", -lfc_value, lfc_value))
-
-res.ancombc2.as.t2.mut.long = res.ancombc2.as.t2.mut %>%
-  pivot_longer(
-    cols = starts_with("q_land_use"),
-    names_to = "contrast",
-    values_to = "q_value"
-  )
-
-#filtering the results for p value and lfc
-res.ancombc2.as.t2.mut.long = res.ancombc2.as.t2.mut.long %>%
-  filter(abs(p_value) < 0.05)
-
-res.ancombc2.as.t2.mut.long = res.ancombc2.as.t2.mut.long %>%
-  filter(abs(lfc_value) > 0.5)
-
-res.ancombc2.as.t2.mut.long.filt = res.ancombc2.as.t2.mut.long %>%
-  filter(
-    str_remove(contrast, "^[^_]+_") == str_remove(lfc_source, "^[^_]+_")
-  )
-
-tt.as.ott.t2 = as.data.frame(tax_table(as.ott.t2))
-tt.as.ott.t2$ASV = row.names(tt.as.ott.t2)
-
-res.ancombc2.as.ott.t2.df = merge(res.ancombc2.as.t2.mut.long.filt, tt.as.ott.t2, by.y = "ASV")
-
-ancombc2.ns.t1 = ancombc2(ns.ott.t1, p_adj_method = "fdr", fix_formula = "land_use", group = "land_use", tax_level = NULL, alpha = 0.05, verbose = F, dunnet = F, pairwise = T)
-
-res.ancombc2.ns.t1 = ancombc2.ns.t1$res_pair
-
-res.ancombc2.ns.t1$ns. = res.ancombc2.ns.t1$taxon
-
-res.ancombc2.ns.t1 = res.ancombc2.ns.t1[, c(2, 4, 11, 13, 23), drop = FALSE] #select columns of interest
-
-res.ancombc2.ns.t1.mut = res.ancombc2.ns.t1 %>%
-  pivot_longer(cols = c(lfc_land_useforest, lfc_land_useintensive_land_useforest), 
-               names_to = "lfc_source", values_to = "lfc_value") %>%
-  mutate(lfc_value = ifelse(lfc_source == "lfc_land_useforest", -lfc_value, lfc_value))
-
-res.ancombc2.ns.t1.mut.long = res.ancombc2.ns.t1.mut %>%
-  pivot_longer(
-    cols = starts_with("p_land_use"),
-    names_to = "contrast",
-    values_to = "p_value"
-  )
-
-#filtering the results for p value and lfc
-res.ancombc2.ns.t1.mut.long = res.ancombc2.ns.t1.mut.long %>%
-  filter(abs(p_value) < 0.05)
-
-res.ancombc2.ns.t1.mut.long = res.ancombc2.ns.t1.mut.long %>%
-  filter(abs(lfc_value) > 0.5)
-
-res.ancombc2.ns.t1.mut.long.filt = res.ancombc2.ns.t1.mut.long %>%
-  filter(
-    str_remove(contrns., "^[^_]+_") == str_remove(lfc_source, "^[^_]+_")
-  )
-
-ancombc2.ns.t2 = ancombc2(ns.ott.t2, p_adj_method = "fdr", fix_formula = "land_use", group = "land_use", tax_level = NULL, alpha = 0.05, verbose = F, dunnet = F, pairwise = T)
-
-res.ancombc2.ns.t2 = ancombc2.ns.t2$res_pair
-
-res.ancombc2.ns.t2$ns. = res.ancombc2.ns.t2$taxon
-
-res.ancombc2.ns.t2 = res.ancombc2.ns.t2[, c(2, 4, 11, 13, 23), drop = FALSE] #select columns of interest
-
-res.ancombc2.ns.t2.mut = res.ancombc2.ns.t2 %>%
-  pivot_longer(cols = c(lfc_land_useforest, lfc_land_useintensive_land_useforest), 
-               names_to = "lfc_source", values_to = "lfc_value") %>%
-  mutate(lfc_value = ifelse(lfc_source == "lfc_land_useforest", -lfc_value, lfc_value))
-
-res.ancombc2.ns.t2.mut.long = res.ancombc2.ns.t2.mut %>%
-  pivot_longer(
-    cols = starts_with("p_land_use"),
-    names_to = "contrast",
-    values_to = "p_value"
-  )
-
-#filtering the results for p value and lfc
-res.ancombc2.ns.t2.mut.long = res.ancombc2.ns.t2.mut.long %>%
-  filter(abs(p_value) < 0.05)
-
-res.ancombc2.ns.t2.mut.long = res.ancombc2.ns.t2.mut.long %>%
-  filter(abs(lfc_value) > 0.5)
-
-res.ancombc2.ns.t2.mut.long.filt = res.ancombc2.ns.t2.mut.long %>%
-  filter(
-    str_remove(contrns., "^[^_]+_") == str_remove(lfc_source, "^[^_]+_")
-  )
+write.csv(df.res.anbc2.as.t1.iovseo, "ancombc2_DB_iovseo_T1.csv")
+write.csv(df.res.anbc2.as.t2.iovseo, "ancombc2_DB_iovseo_T2.csv")
 
 # Set reference levels
-sample_data(ns.ott.t1)$site = relevel(sample_data(ns.ott.t1)$site, ref = "EO")
-sample_data(ns.ott.t2)$site = relevel(sample_data(ns.ott.t2)$site, ref = "EO")
+sample_data(as.ott.t1)$site = relevel(sample_data(as.ott.t1)$site, ref = "FO")
+sample_data(as.ott.t2)$site = relevel(sample_data(as.ott.t2)$site, ref = "FO")
 
 #Run ANCOMBC2
-ancombc2.ns.t1.eo.ref = ancombc2(ns.ott.t1, p_adj_method = "fdr", fix_formula = "site", group = "site", tax_level = NULL,
-                                 alpha = 0.05, verbose = F, dunnet = F, pairwise = F)
+ancombc2.as.t1.fo.ref = ancombc2(as.ott.t1, p_adj_method = "fdr", fix_formula = "site", group = "site", tax_level = NULL,
+                          alpha = 0.05, verbose = F, dunnet = F, pairwise = F)
+ancombc2.as.t2.fo.ref = ancombc2(as.ott.t2, p_adj_method = "fdr", fix_formula = "site", group = "site", tax_level = NULL,
+                          alpha = 0.05, verbose = F, dunnet = F, pairwise = F)
 
-#Run ANCOMBC2
-ancombc2.ns.t2.eo.ref = ancombc2(ns.ott.t2, p_adj_method = "fdr", fix_formula = "site", group = "site", tax_level = NULL,
-                                 alpha = 0.05, verbose = F, dunnet = F, pairwise = F)
+res.ancombc2.as.t1.fo.ref = ancombc2.as.t1.fo.ref$res
+res.ancombc2.as.t2.fo.ref = ancombc2.as.t2.fo.ref$res
 
-res.ancombc2.ns.t1.eo.ref = ancombc2.ns.t1.eo.ref$res
-res.ancombc2.ns.t2.eo.ref = ancombc2.ns.t2.eo.ref$res
-
-res.ancombc2.ns.t1.eo.ref$ASV = res.ancombc2.ns.t1.eo.ref$taxon
-res.ancombc2.ns.t2.eo.ref$ASV = res.ancombc2.ns.t2.eo.ref$taxon
-
-tt.ns.ott = as.data.frame(tax_table(ns.ott))
-tt.ns.ott$ASV = row.names(tt.ns.ott)
-
-res.anbc2.ns.t1.iovseo = res.ancombc2.ns.t1.eo.ref %>%
+res.ancombc2.as.t1.iovsfo = res.ancombc2.as.t1.fo.ref %>%
   filter((q_siteIO < 0.05 &
             passed_ss_siteIO == "TRUE" &
             abs(lfc_siteIO) > 0.5))
 
-res.anbc2.ns.t2.iovseo = res.ancombc2.ns.t2.eo.ref %>%
+res.ancombc2.as.t2.iovsfo = res.ancombc2.as.t2.eo.ref %>%
   filter((q_siteIO < 0.05 &
             passed_ss_siteIO == "TRUE" &
             abs(lfc_siteIO) > 0.5))
 
-df.res.ancombc2.ns.iovseo.t1 = merge(res.anbc2.ns.t1.iovseo, tt.ns.ott, by = "ASV")
-df.res.ancombc2.ns.iovseo.t2 = merge(res.anbc2.ns.t2.iovseo, tt.ns.ott, by = "ASV")
+df.res.anbc2.as.t1.iovsfo$ASV = df.res.anbc2.as.t1.iovsfo$taxon
+df.res.anbc2.as.t2.iovsfo$ASV = df.res.anbc2.as.t1.iovsfo$taxon    
 
-write.csv(res.ancombc2.as.t1.mut.long.filt, "ancombc2_AS_T1.csv")
-write.csv(res.ancombc2.as.t2.mut.long.filt, "ancombc2_AS_T2.csv")
-write.csv(res.ancombc2.ns.t1.mut.long.filt, "ancombc2_NS_T1.csv")
-write.csv(res.ancombc2.ns.t2.mut.long.filt, "ancombc2_NS_T2.csv")
+df.res.anbc2.as.t1.iovsfo = merge(res.anbc2.as.t1.iovsfo, as.matrix.data.frame(as.ott), by = "ASV")
+df.res.anbc2.as.t2.iovsfo = merge(res.ancombc2.as.t2.iovsfo, as.matrix.data.frame(as.ott), by = "ASV")
 
-write.csv(df.res.ancombc2.ns.iovseo.t1, "ancombc2_MB_iovseo_T1.csv")
-write.csv(df.res.ancombc2.ns.iovseo.t2, "ancombc2_MB_iovseo_T2.csv")
+write.csv(df.res.anbc2.as.t1.iovsfo, "ancombc2_DB_iovsfo_T1.csv")
+write.csv(df.res.anbc2.as.t2.iovsfo, "ancombc2_DB_iovsfo_T2.csv")
 
-#Perlenbach samples
+ancombc2.ns.t1 = ancombc2(ns.ott.t1, p_adj_method = "fdr", fix_formula = "land_use", group = "land_use", tax_level = NULL, alpha = 0.05, verbose = F, dunnet = F, pairwise = F)
 
-ancombc2.as.pb = ancombc2(
-  as.pb,
-  p_adj_method = "fdr",
-  fix_formula = "site",
-  tax_level = NULL,
-  alpha = 0.05,
-  verbose = TRUE,
-  dunnet = FALSE,
-  pairwise = FALSE,
-  ref
-)
 
-ancombc2.ns.pb.t2 = ancombc2(ns.pb.t2, p_adj_method = "fdr", fix_formula = "site", tax_level = NULL,
+
+#ANCOM-BC2 for Perlenbach samples
+
+ancombc2.as.pb.t1 = ancombc2(as.pb.t1, p_adj_method = "fdr", fix_formula = "site", tax_level = NULL,
+                             alpha = 0.05, verbose = T, dunnet = F, pairwise = F)
+          
+ancombc2.as.pb.t2 = ancombc2(as.pb.t2, p_adj_method = "fdr", fix_formula = "site", tax_level = NULL,
                              alpha = 0.05, verbose = T, dunnet = F, pairwise = F)
 
 
@@ -1005,25 +866,22 @@ res.ancombc2.as.pb.T2$ASV = res.ancombc2.as.pb.T2$taxon
 res.ancombc2.as.pb = res.ancombc2.as.pb[, c(3, 15, 23), drop = FALSE] #select columns of interest
 
 #filtering the results for q value, ss and lfc
-res.ancombc2.as.pb.t1.filt = res.ancombc2.as.pb %>%
-  filter(p_land_use_stforest.T1 < 0.05) %>%
-  filter(passed_ss_land_use_stforest.T1 == TRUE) %>%
-  filter(abs(lfc_land_use_stforest.T1) > 0.5)
+res.ancombc2.as.pb.t1.epvsfp = res.ancombc2.as.pb.T1 %>%
+  filter(q_siteFP < 0.05) %>%
+  filter(passed_ss_siteFP == TRUE) %>%
+  filter(abs(lfc_siteFP) > 0.5)
 
-res.ancombc2.as.pb.t2.filt = res.ancombc2.as.pb.T2 %>%
-  filter(p_land_use_stforest.T2 < 0.05) %>%
-  filter(passed_ss_land_use_stforest.T2 == TRUE) %>%
-  filter(abs(lfc_land_use_stforest.T2) > 0.5)
+res.ancombc2.as.pb.t2.epvsfp = res.ancombc2.as.pb.T2 %>%
+  filter(q_siteFP < 0.05) %>%
+  filter(passed_ss_siteFP == TRUE) %>%
+  filter(abs(lfc_siteFP) > 0.5)
 
-res.ancombc2.as.pb.t1.filt = res.ancombc2.as.pb.t1.filt[, c(3, 15, 30), drop = FALSE] #select columns of interest
+res.ancombc2.as.pb.t1.epvsfp = res.ancombc2.as.pb.t2.epvsfp[, c(3, 15, 30), drop = FALSE] #select columns of interest
 
-res.ancombc2.as.pb.t2.filt = res.ancombc2.as.pb.t2.filt[, c(5, 17, 30), drop = FALSE] #select columns of interest
+res.ancombc2.as.pb.t2.epvsfp = res.ancombc2.as.pb.t2.epvsfp[, c(5, 17, 30), drop = FALSE] #select columns of interest
 
-tt.as.pb = as.data.frame(tax_table(as.pb))
-tt.as.pb$ASV = row.names(tt.as.pb)
-
-res.ancombc2.as.pb.t1.filt.df = merge(res.ancombc2.as.pb.t1.filt, tt.as.pb, by.y = "ASV")
-res.ancombc2.as.pb.t2.filt.df = merge(res.ancombc2.as.pb.t2.filt, tt.as.pb, by.y = "ASV")
+res.ancombc2.as.pb.t1.filt.df = merge(res.ancombc2.as.pb.t1.epvsfp, as.matrix.data.frame(sample_data(as.pb)), by = "ASV")
+res.ancombc2.as.pb.t2.filt.df = merge(res.ancombc2.as.pb.t2.epvsfp, as.matrix.data.frame(sample_data(as.pb)), by = "ASV")
 
 write.csv(res.ancombc2.as.pb.t1.filt.df, "res_ancombc2_perlenbach_T1.csv")
 write.csv(res.ancombc2.as.pb.t2.filt.df, "res_ancombc2_perlenbach_T2.csv")
@@ -1170,10 +1028,6 @@ dev.off()
 
 #Co-occurrence network analyses
 #Subsetting the sample
-library(NetCoMi)
-library(phyloseq)
-library(dplyr)
-load("phyloseq_obj_biofilms_exp_norm_css.RData")
 blik.ott = subset_samples(phy.blik2.css, stream == "otterbach")
 blik.pb = subset_samples(phy.blik2.css, stream == "perlenbach")
 
@@ -1810,22 +1664,7 @@ conet.mb.fp = plot(props.net.mb.fp,
                    cioLabels = 0.5,
                    labelFont = 0.3)
 
-###rain plot of Fig. S3
-rain = read.csv("niederschlag_2023_eiserzell.csv")
-library(ggplot2)
-
-rain$Datum = as.Date(rain$Datum, format = "%d/%m/%Y")
-ggplot() + geom_bar(rain, mapping = aes(x = Datum, y = avg), fill = "grey", alpha = 0.4,
-                    stat = "identity") +
-  geom_line(rain, mapping = aes(x = Datum, y = Niederschlag), col = "royalblue4") +
-  scale_x_date(
-    date_labels = "%b",  # Show only month names
-    breaks = "1 month"   # Place ticks at monthly intervals
-  ) +
-  scale_y_continuous(name = "") + ylim(0, 200) + ggpubr::theme_pubr() + labs(x = "2023", y = "Daily average and accumulated rainfall (mm)")
-
-
-###DOC plot of Fig. S4
+###DOC plot of Fig. S5
 doc.df = read.csv("DOC_data_sebastian.csv", header = T)
 # Clean timestamps (handle case with only date)
 doc.df = doc.df %>%
@@ -1843,7 +1682,7 @@ daily_avg = doc.long %>%
 
 daily_avg$Date = as.Date(daily_avg$Date, format = "%d/%m/%Y")  # Adjust format as needed
 
-# Create the plot
+# Create the plot for DOC in the Otterbach
 scat.doc = ggplot(daily_avg, aes(x = Date, y = Daily_Avg, color = Type, group = Type)) +
   geom_point(size = 1) +
   geom_line(size = 1) +
@@ -1859,6 +1698,23 @@ scat.doc = ggplot(daily_avg, aes(x = Date, y = Daily_Avg, color = Type, group = 
   ) + ylim(0,40) +
   ggpubr::theme_pubr()
 
+pdf("FigS5_DOC.pdf", width = 8, height = 8)
 scat.doc
+dev.off()
 
-conet.as.ott.in.t1 = SpiecEasi::spiec.easi(as.ott.in.t1)
+###Rain plot of Fig. S6
+rain = read.csv("niederschlag_2023_eiserzell.csv")
+library(ggplot2)
+
+rain$Datum = as.Date(rain$Datum, format = "%d/%m/%Y")
+
+pdf("FigS6_rain.pdf", width = 10, height = 8)
+ggplot() + geom_bar(rain, mapping = aes(x = Datum, y = avg), fill = "grey", alpha = 0.4,
+                    stat = "identity") +
+  geom_line(rain, mapping = aes(x = Datum, y = Niederschlag), col = "royalblue4") +
+  scale_x_date(
+    date_labels = "%b",  # Show only month names
+    breaks = "1 month"   # Place ticks at monthly intervals
+  ) +
+  scale_y_continuous(name = "") + ylim(0, 200) + ggpubr::theme_pubr() + labs(x = "2023", y = "Daily average and accumulated rainfall (mm)")
+dev.off()
